@@ -1,7 +1,15 @@
 package main
 
-import "fmt"
+import (
+	"log"
+
+	"github.com/aleksandrvarlamov/safer/internal/config"
+)
 
 func main() {
-	fmt.Println("safer")
+	config, err := config.Load()
+    if err != nil {
+        log.Fatalf("config: %v", err)
+    }
+	log.Printf("Config loaded: %+v", config)
 }
