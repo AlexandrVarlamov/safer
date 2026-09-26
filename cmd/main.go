@@ -11,6 +11,7 @@ import (
 	"github.com/aleksandrvarlamov/safer/internal/config"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/handlers/slogpretty"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
+	"github.com/aleksandrvarlamov/safer/internal/service/document"
 	"github.com/aleksandrvarlamov/safer/internal/storage"
 	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/save"
 	mwLogger "github.com/aleksandrvarlamov/safer/internal/transport/middleware/logger"
@@ -39,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("R2 client initialized successfully!: ", R2client)
+	log.Info("R2 client initialized successfully!", slog.Any("client", R2client))
 
 	router := chi.NewRouter()
 
@@ -49,7 +50,9 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Put("/save", save.New(log, R2client))
+	documentService := document.New(log, R2client)
+
+	router.Put("/save", save.New(log, documentService))
 
 	srv := &http.Server{
 		Addr:         ":8082",
