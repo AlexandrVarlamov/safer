@@ -46,14 +46,20 @@ func (r *R2) Put(ctx context.Context, bucket, key string, body io.Reader, size *
 	return result, err
 }
 
-func (r *R2) Get(ctx context.Context, bucket, key string) ([]byte, error) {
+func (r *R2) Get(ctx context.Context, bucket, key string) ([]byte, string, error) {
 	resp, err := r.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return data, aws.ToString(resp.ContentType), nil
 }

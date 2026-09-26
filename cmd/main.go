@@ -13,6 +13,7 @@ import (
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
 	"github.com/aleksandrvarlamov/safer/internal/service/document"
 	"github.com/aleksandrvarlamov/safer/internal/storage"
+	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/download"
 	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/save"
 	mwLogger "github.com/aleksandrvarlamov/safer/internal/transport/middleware/logger"
 	"github.com/go-chi/chi/v5"
@@ -48,11 +49,12 @@ func main() {
 	router.Use(middleware.Logger)
 	router.Use(mwLogger.New(log))
 	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
 
 	documentService := document.New(log, R2client)
 
 	router.Put("/save", save.New(log, documentService))
+
+	router.Get("/download/{bucket}/{key}", download.Get(log, documentService))
 
 	srv := &http.Server{
 		Addr:         ":8082",
