@@ -13,6 +13,7 @@ import (
 
 type Storage interface {
 	Put(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (*s3.PutObjectOutput, error)
+	Get(ctx context.Context, bucket, key string) ([]byte, string, error)
 }
 
 type Service struct {
@@ -45,4 +46,22 @@ func (s *Service) Save(ctx context.Context, bucket, key string, body io.Reader, 
 	log.Info("document saved", slog.String("etag", etag))
 
 	return etag, nil
+}
+
+func (s *Service) Get(ctx context.Context, bucket, key string) ([]byte, string, error) {
+	const op = "document.Get"
+
+	log := s.log.With(
+		slog.String("op", op),
+	)
+
+	content, contentType, err := s.storage.Get(ctx, bucket, key)
+	if err != nil {
+		log.Error("failed to get document", sl.Err(err))
+		return nil, "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Info("document retrieved", slog.Int("size", len(content)), slog.String("content_type", contentType))
+
+	return content, contentType, nil
 }
