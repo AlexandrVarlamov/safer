@@ -1,14 +1,13 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 
 	"github.com/aleksandrvarlamov/safer/internal/config"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config" // SDK-конфиг — с псевдонимом!
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -36,13 +35,15 @@ func NewR2(ctx context.Context, cfg *config.Config) (*R2, error) {
 	return &R2{client: client}, nil
 }
 
-func (r *R2) Put(ctx context.Context, bucket, key string, data []byte) error {
-	_, err := r.client.PutObject(ctx, &s3.PutObjectInput{
+func (r *R2) Put(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (*s3.PutObjectOutput, error) {
+	result, err := r.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-		Body:   bytes.NewReader(data),
+		Body:   body,
+		ContentLength: size,
+		ContentType:   aws.String(contentType),
 	})
-	return err
+	return result, err
 }
 
 func (r *R2) Get(ctx context.Context, bucket, key string) ([]byte, error) {

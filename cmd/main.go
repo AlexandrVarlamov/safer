@@ -1,15 +1,93 @@
 package main
 
 import (
+	"context"
 	"log"
+	"log/slog"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/aleksandrvarlamov/safer/internal/config"
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/handlers/slogpretty"
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
+	"github.com/aleksandrvarlamov/safer/internal/storage"
+	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/save"
+	mwLogger "github.com/aleksandrvarlamov/safer/internal/transport/middleware/logger"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+const (
+	envLocal = "local"
+	envProd  = "prod"
 )
 
 func main() {
 	config, err := config.Load()
-    if err != nil {
-        log.Fatalf("config: %v", err)
-    }
-	log.Printf("Config loaded: %+v", config)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
+	log := setupLogger(config.Env)
+
+	log.Info("STARTING SAFER SERVER!")
+
+	R2client, err := storage.NewR2(context.Background(), config)
+	if err != nil {
+		log.Error("Failed to init R2 client", sl.Err(err))
+		os.Exit(1)
+	}
+
+	log.Info("R2 client initialized successfully!: ", R2client)
+
+	router := chi.NewRouter()
+
+	router.Use(middleware.RequestID)
+	router.Use(middleware.Logger)
+	router.Use(mwLogger.New(log))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	router.Put("/save", save.New(log, R2client))
+
+	srv := &http.Server{
+		Addr:         ":8082",
+		Handler:      router,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  10 * time.Second,
+	}
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Error("Failed to start server", sl.Err(err))
+		os.Exit(1)
+	}
+}
+
+func setupLogger(env string) *slog.Logger {
+
+	var log *slog.Logger
+
+	switch env {
+	case envLocal:
+		log = setupPrettySlog()
+	case envProd:
+		log = slog.New(
+			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	}
+
+	return log
+}
+
+func setupPrettySlog() *slog.Logger {
+	opts := slogpretty.PrettyHandlerOptions{
+		SlogOpts: &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		},
+	}
+
+	handler := opts.NewPrettyHandler(os.Stdout)
+
+	return slog.New(handler)
 }
