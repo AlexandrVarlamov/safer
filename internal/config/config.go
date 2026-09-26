@@ -13,6 +13,7 @@ type Config struct {
     APIToken        string `env:"API_TOKEN,required"`
     AccessKeyID     string `env:"ACCESS_KEY_ID,required"`
     SecretAccessKey string `env:"SECRET_ACCESS_KEY,required"`
+    Env             string `env:"env,required"`
 }
 
 func Load() (*Config, error) {
