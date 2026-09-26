@@ -6,12 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/aleksandrvarlamov/safer/internal/lib/api/response"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
 	"github.com/aleksandrvarlamov/safer/internal/lib/validation"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator"
@@ -29,11 +29,11 @@ type Response struct {
 	ETag   string            `json:"etag,omitempty"`
 }
 
-type R2 interface {
-	Put(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (*s3.PutObjectOutput, error)
+type Saver interface {
+	Save(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (string, error)
 }
 
-func New(log *slog.Logger, r2 R2) http.HandlerFunc {
+func New(log *slog.Logger, saver Saver) http.HandlerFunc {
 	validate := validation.New()
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +95,7 @@ func New(log *slog.Logger, r2 R2) http.HandlerFunc {
 				contentType = "application/octet-stream"
 			}
 
-			result, err := r2.Put(r.Context(), req.Bucket, req.Key, f, &fh.Size, contentType)
+			etag, err := saver.Save(r.Context(), req.Bucket, req.Key, f, &fh.Size, contentType)
 			f.Close()
 			if err != nil {
 				log.Error("failed to save document", sl.Err(err))
@@ -105,13 +105,11 @@ func New(log *slog.Logger, r2 R2) http.HandlerFunc {
 				return
 			}
 
-			log.Info("document saved", slog.String("etag", aws.ToString(result.ETag)))
-
 			saved = append(saved, Response{
 				Status: response.OK(),
 				Key:    req.Key,
 				Size:   fh.Size,
-				ETag:   aws.ToString(result.ETag),
+				ETag:   strings.Trim(aws.ToString(&etag), `"`),
 			})
 		}
 
