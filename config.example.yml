@@ -1,0 +1,7 @@
+env:
+
+storage:
+  account_id: ""
+  api_token: ""
+  access_key_id: ""
+  secret_access_key: ""

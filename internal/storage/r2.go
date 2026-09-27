@@ -20,7 +20,7 @@ func NewR2(ctx context.Context, cfg *config.Config) (*R2, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion("auto"),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			cfg.AccessKeyID, cfg.SecretAccessKey, "",
+			cfg.Storage.AccessKeyID, cfg.Storage.SecretAccessKey, "",
 		)),
 	)
 	if err != nil {
@@ -28,7 +28,7 @@ func NewR2(ctx context.Context, cfg *config.Config) (*R2, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.AccountID))
+		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.Storage.AccountID))
 		o.UsePathStyle = true
 	})
 
@@ -37,9 +37,9 @@ func NewR2(ctx context.Context, cfg *config.Config) (*R2, error) {
 
 func (r *R2) Put(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (*s3.PutObjectOutput, error) {
 	result, err := r.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-		Body:   body,
+		Bucket:        aws.String(bucket),
+		Key:           aws.String(key),
+		Body:          body,
 		ContentLength: size,
 		ContentType:   aws.String(contentType),
 	})

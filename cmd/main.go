@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"log/slog"
 	"net/http"
@@ -26,7 +27,10 @@ const (
 )
 
 func main() {
-	config, err := config.Load()
+	configPath := flag.String("config", "config.yml", "path to config file")
+	flag.Parse()
+
+	config, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
@@ -46,7 +50,6 @@ func main() {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
-	router.Use(middleware.Logger)
 	router.Use(mwLogger.New(log))
 	router.Use(middleware.Recoverer)
 

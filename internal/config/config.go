@@ -3,26 +3,62 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
-	"github.com/caarlos0/env/v11"
-	"github.com/joho/godotenv"
+	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
-    AccountID       string `env:"ACCOUNT_ID,required"`
-    APIToken        string `env:"API_TOKEN,required"`
-    AccessKeyID     string `env:"ACCESS_KEY_ID,required"`
-    SecretAccessKey string `env:"SECRET_ACCESS_KEY,required"`
-    Env             string `env:"env,required"`
+type Storage struct {
+	AccountID       string `yaml:"account_id"`
+	APIToken        string `yaml:"api_token"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
 }
 
-func Load() (*Config, error) {
-    if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
-        return nil, fmt.Errorf("load .env: %w", err)
-    }
-    var cfg Config
-    if err := env.Parse(&cfg); err != nil {
-        return nil, fmt.Errorf("parse config: %w", err)
-    }
-    return &cfg, nil
+type Config struct {
+	Env     string  `yaml:"env"`
+	Storage Storage `yaml:"storage"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config file: %w", err)
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	return &cfg, nil
+}
+
+func (c *Config) validate() error {
+	var missing []string
+
+	if c.Env == "" {
+		missing = append(missing, "env")
+	}
+	if c.Storage.AccountID == "" {
+		missing = append(missing, "storage.account_id")
+	}
+	if c.Storage.APIToken == "" {
+		missing = append(missing, "storage.api_token")
+	}
+	if c.Storage.AccessKeyID == "" {
+		missing = append(missing, "storage.access_key_id")
+	}
+	if c.Storage.SecretAccessKey == "" {
+		missing = append(missing, "storage.secret_access_key")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing fields: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
