@@ -28,7 +28,7 @@ func NewR2(ctx context.Context, cfg *config.Config) (*R2, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.Storage.AccountID))
+		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.Cloudflare.AccountID))
 		o.UsePathStyle = true
 	})
 

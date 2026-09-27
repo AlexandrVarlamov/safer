@@ -15,9 +15,20 @@ type Storage struct {
 	SecretAccessKey string `yaml:"secret_access_key"`
 }
 
+type Sqlite struct {
+	APIToken   string `yaml:"api_token"`
+	DatabaseID string `yaml:"database_id"`
+}
+
+type Cloudflare struct {
+	AccountID string `yaml:"account_id"`
+}
+
 type Config struct {
-	Env     string  `yaml:"env"`
-	Storage Storage `yaml:"storage"`
+	Env        string     `yaml:"env"`
+	Storage    Storage    `yaml:"storage"`
+	Sqlite     Sqlite     `yaml:"sqlite"`
+	Cloudflare Cloudflare `yaml:"cloudflare"`
 }
 
 func Load(path string) (*Config, error) {
@@ -44,8 +55,8 @@ func (c *Config) validate() error {
 	if c.Env == "" {
 		missing = append(missing, "env")
 	}
-	if c.Storage.AccountID == "" {
-		missing = append(missing, "storage.account_id")
+	if c.Cloudflare.AccountID == "" {
+		missing = append(missing, "cloudflare.account_id")
 	}
 	if c.Storage.APIToken == "" {
 		missing = append(missing, "storage.api_token")
@@ -55,6 +66,12 @@ func (c *Config) validate() error {
 	}
 	if c.Storage.SecretAccessKey == "" {
 		missing = append(missing, "storage.secret_access_key")
+	}
+	if c.Sqlite.APIToken == "" {
+		missing = append(missing, "sqlite.api_token")
+	}
+	if c.Sqlite.DatabaseID == "" {
+		missing = append(missing, "sqlite.database_id")
 	}
 
 	if len(missing) > 0 {
