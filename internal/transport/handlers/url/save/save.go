@@ -33,7 +33,7 @@ type Saver interface {
 	Save(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (string, error)
 }
 
-func New(saver Saver) http.HandlerFunc {
+func New(maxUploadBytes int64, saver Saver) http.HandlerFunc {
 	validate := validation.New()
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +43,18 @@ func New(saver Saver) http.HandlerFunc {
 			slog.String("op", op),
 		)
 
+		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			var maxBytesErr *http.MaxBytesError
+			if errors.As(err, &maxBytesErr) {
+				log.Warn("upload too large",
+					slog.Int64("limit_bytes", maxUploadBytes),
+				)
+				render.Status(r, http.StatusRequestEntityTooLarge)
+				render.JSON(w, r, response.Error("file too large"))
+				return
+			}
 			log.Warn("failed to parse multipart form", sl.Err(err))
 			render.JSON(w, r, response.Error(err.Error()))
 			return

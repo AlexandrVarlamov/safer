@@ -7,11 +7,15 @@ log:
 cloudflare:
   account_id: ""
 
+server:
+  addr: ":8082"
+
 storage:
   account_id: ""
   api_token: ""
   access_key_id: ""
   secret_access_key: ""
+  max_upload_size: 500MB
 
 sqlite:
   api_token: ""

@@ -26,6 +26,12 @@ import (
 const (
 	envLocal = "local"
 	envProd  = "prod"
+
+	// Таймауты остаются в коде: они связаны с логикой загрузки
+	// (см. обсуждение больших файлов), а не с окружением.
+	serverReadTimeout  = 10 * time.Second
+	serverWriteTimeout = 10 * time.Second
+	serverIdleTimeout  = 60 * time.Second
 )
 
 func main() {
@@ -41,7 +47,7 @@ func main() {
 	log := setupLogger(config.Env, config.Log)
 
 	log.Info("starting safer server",
-		slog.String("addr", ":8082"),
+		slog.String("addr", config.Server.Addr),
 	)
 
 	R2client, err := storage.NewR2(context.Background(), config)
@@ -60,16 +66,16 @@ func main() {
 
 	documentService := document.New(R2client)
 
-	router.Put("/save", save.New(documentService))
+	router.Put("/save", save.New(config.Storage.MaxUploadBytes, documentService))
 
 	router.Get("/download/{bucket}/{key}", download.Get(documentService))
 
 	srv := &http.Server{
-		Addr:         ":8082",
+		Addr:         config.Server.Addr,
 		Handler:      router,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  10 * time.Second,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
 	}
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

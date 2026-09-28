@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alecthomas/units"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,6 +14,8 @@ type Storage struct {
 	APIToken        string `yaml:"api_token"`
 	AccessKeyID     string `yaml:"access_key_id"`
 	SecretAccessKey string `yaml:"secret_access_key"`
+	MaxUploadSize   string `yaml:"max_upload_size"`
+	MaxUploadBytes  int64  `yaml:"-"`
 }
 
 type Sqlite struct {
@@ -32,9 +35,14 @@ type Log struct {
 	File string `yaml:"file"`
 }
 
+type Server struct {
+	Addr string `yaml:"addr"`
+}
+
 type Config struct {
 	Env        string     `yaml:"env"`
 	Log        Log        `yaml:"log"`
+	Server     Server     `yaml:"server"`
 	Storage    Storage    `yaml:"storage"`
 	Sqlite     Sqlite     `yaml:"sqlite"`
 	Cloudflare Cloudflare `yaml:"cloudflare"`
@@ -55,8 +63,22 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	if cfg.Storage.MaxUploadSize != "" {
+		b, err := units.ParseBase2Bytes(cfg.Storage.MaxUploadSize)
+		if err != nil {
+			return nil, fmt.Errorf("parse storage.max_upload_size %q: %w", cfg.Storage.MaxUploadSize, err)
+		}
+		cfg.Storage.MaxUploadBytes = int64(b)
+	} else {
+		cfg.Storage.MaxUploadBytes = 500 << 20 // дефолт 500 МБ
+	}
+
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
+	}
+
+	if cfg.Server.Addr == "" {
+		cfg.Server.Addr = ":8082"
 	}
 
 	return &cfg, nil
