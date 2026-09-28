@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aleksandrvarlamov/safer/internal/config"
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/handlers/multihandler"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/handlers/slogpretty"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
 	"github.com/aleksandrvarlamov/safer/internal/service/document"
@@ -17,6 +18,7 @@ import (
 	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/download"
 	"github.com/aleksandrvarlamov/safer/internal/transport/handlers/url/save"
 	mwLogger "github.com/aleksandrvarlamov/safer/internal/transport/middleware/logger"
+	"github.com/aleksandrvarlamov/safer/internal/transport/middleware/recoverer"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -32,32 +34,35 @@ func main() {
 
 	config, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("config: %v", err)
-	}
-
-	log := setupLogger(config.Env)
-
-	log.Info("STARTING SAFER SERVER!")
-
-	R2client, err := storage.NewR2(context.Background(), config)
-	if err != nil {
-		log.Error("Failed to init R2 client", sl.Err(err))
+		slog.New(slog.NewJSONHandler(os.Stderr, nil)).Error("config load failed", sl.Err(err))
 		os.Exit(1)
 	}
 
-	log.Info("R2 client initialized successfully!", slog.Any("client", R2client))
+	log := setupLogger(config.Env, config.Log)
+
+	log.Info("starting safer server",
+		slog.String("addr", ":8082"),
+	)
+
+	R2client, err := storage.NewR2(context.Background(), config)
+	if err != nil {
+		log.Error("failed to init R2 client", sl.Err(err))
+		os.Exit(1)
+	}
+
+	log.Info("R2 client initialized")
 
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 	router.Use(mwLogger.New(log))
-	router.Use(middleware.Recoverer)
+	router.Use(recoverer.New())
 
-	documentService := document.New(log, R2client)
+	documentService := document.New(R2client)
 
-	router.Put("/save", save.New(log, documentService))
+	router.Put("/save", save.New(documentService))
 
-	router.Get("/download/{bucket}/{key}", download.Get(log, documentService))
+	router.Get("/download/{bucket}/{key}", download.Get(documentService))
 
 	srv := &http.Server{
 		Addr:         ":8082",
@@ -68,34 +73,44 @@ func main() {
 	}
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Error("Failed to start server", sl.Err(err))
+		log.Error("failed to start server", sl.Err(err))
 		os.Exit(1)
 	}
 }
 
-func setupLogger(env string) *slog.Logger {
+func setupLogger(env string, logCfg config.Log) *slog.Logger {
+	opts := &slog.HandlerOptions{Level: parseLevel(logCfg.Level)}
 
-	var log *slog.Logger
-
-	switch env {
-	case envLocal:
-		log = setupPrettySlog()
-	case envProd:
-		log = slog.New(
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	var primary slog.Handler
+	if env == envLocal {
+		primary = slogpretty.PrettyHandlerOptions{SlogOpts: opts}.NewPrettyHandler(os.Stdout)
+	} else {
+		primary = slog.NewJSONHandler(os.Stdout, opts)
 	}
+
+	handler := primary
+	if logCfg.File != "" {
+		file, err := os.OpenFile(logCfg.File, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			slog.New(slog.NewJSONHandler(os.Stderr, nil)).Error("failed to open log file", sl.Err(err))
+			os.Exit(1)
+		}
+		handler = multihandler.New(primary, slog.NewJSONHandler(file, opts))
+	}
+
+	log := slog.New(handler).With(
+		slog.String("service", "safer"),
+		slog.String("env", env),
+	)
+	slog.SetDefault(log)
 
 	return log
 }
 
-func setupPrettySlog() *slog.Logger {
-	opts := slogpretty.PrettyHandlerOptions{
-		SlogOpts: &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		},
+func parseLevel(level string) slog.Level {
+	var l slog.Level
+	if err := l.UnmarshalText([]byte(strings.ToUpper(level))); err != nil {
+		return slog.LevelInfo
 	}
-
-	handler := opts.NewPrettyHandler(os.Stdout)
-
-	return slog.New(handler)
+	return l
 }

@@ -5,16 +5,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/ctxlog"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+// New логирует завершение каждого запроса одним JSON-событием
+// (уровень зависит от HTTP-статуса) и кладёт логгер запроса в контекст
+// для остальных слоёв.
 func New(log *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		log := log.With(
 			slog.String("component", "middleware/logger"),
 		)
-
-		log.Info("logger middleware enabled")
 
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			entry := log.With(
@@ -28,14 +30,22 @@ func New(log *slog.Logger) func(next http.Handler) http.Handler {
 
 			t1 := time.Now()
 			defer func() {
-				entry.Info("request completed",
-					slog.Int("status", ww.Status()),
-					slog.Int("bytes", ww.BytesWritten()),
-					slog.String("duration", time.Since(t1).String()),
+				status := ww.Status()
+				level := slog.LevelInfo
+				switch {
+				case status >= 500:
+					level = slog.LevelError
+				case status >= 400:
+					level = slog.LevelWarn
+				}
+				entry.LogAttrs(r.Context(), level, "request completed",
+					slog.Int("status", status),
+					slog.Int64("bytes", int64(ww.BytesWritten())),
+					slog.Float64("duration_ms", float64(time.Since(t1).Microseconds())/1000.0),
 				)
 			}()
 
-			next.ServeHTTP(ww, r)
+			next.ServeHTTP(ww, r.WithContext(ctxlog.Inject(r.Context(), entry)))
 		}
 
 		return http.HandlerFunc(fn)

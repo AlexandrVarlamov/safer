@@ -1,7 +1,18 @@
-env:
+env: local
+
+log:
+  level: info
+  # file: /tmp/safer.log  # в local дублирует JSON в файл для Alloy
+
+cloudflare:
+  account_id: ""
 
 storage:
   account_id: ""
   api_token: ""
   access_key_id: ""
   secret_access_key: ""
+
+sqlite:
+  api_token: ""
+  database_id: ""

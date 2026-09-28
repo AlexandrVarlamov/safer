@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/aleksandrvarlamov/safer/internal/lib/api/response"
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/ctxlog"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
 	"github.com/aleksandrvarlamov/safer/internal/lib/validation"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator"
 )
@@ -33,19 +33,18 @@ type Saver interface {
 	Save(ctx context.Context, bucket, key string, body io.Reader, size *int64, contentType string) (string, error)
 }
 
-func New(log *slog.Logger, saver Saver) http.HandlerFunc {
+func New(saver Saver) http.HandlerFunc {
 	validate := validation.New()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "save.New"
 
-		log = log.With(
+		log := ctxlog.FromContext(r.Context()).With(
 			slog.String("op", op),
-			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
 
 		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			log.Error("failed to parse multipart form", sl.Err(err))
+			log.Warn("failed to parse multipart form", sl.Err(err))
 			render.JSON(w, r, response.Error(err.Error()))
 			return
 		}
@@ -57,7 +56,7 @@ func New(log *slog.Logger, saver Saver) http.HandlerFunc {
 		if err := validate.Struct(req); err != nil {
 			var validationErrors validator.ValidationErrors
 			if errors.As(err, &validationErrors) {
-				log.Error("invalid request", sl.Err(err))
+				log.Warn("invalid request", sl.Err(err))
 
 				render.JSON(w, r, response.ValidationError(validationErrors))
 
@@ -72,8 +71,7 @@ func New(log *slog.Logger, saver Saver) http.HandlerFunc {
 
 		files := r.MultipartForm.File["file"]
 		if len(files) == 0 {
-			log.Error("no files in request")
-
+			log.Warn("no files in request")
 			render.JSON(w, r, response.Error("no files provided"))
 
 			return

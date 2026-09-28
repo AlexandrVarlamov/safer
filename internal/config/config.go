@@ -24,8 +24,17 @@ type Cloudflare struct {
 	AccountID string `yaml:"account_id"`
 }
 
+type Log struct {
+	Level string `yaml:"level"`
+	// File — необязательный путь: если указан, туда дублируется
+	// однострочный JSON независимо от env (его читает Alloy),
+	// основной вывод остаётся на stdout.
+	File string `yaml:"file"`
+}
+
 type Config struct {
 	Env        string     `yaml:"env"`
+	Log        Log        `yaml:"log"`
 	Storage    Storage    `yaml:"storage"`
 	Sqlite     Sqlite     `yaml:"sqlite"`
 	Cloudflare Cloudflare `yaml:"cloudflare"`
@@ -44,6 +53,10 @@ func Load(path string) (*Config, error) {
 
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = "info"
 	}
 
 	return &cfg, nil

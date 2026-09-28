@@ -7,10 +7,10 @@ import (
 	"net/http"
 
 	"github.com/aleksandrvarlamov/safer/internal/lib/api/response"
+	"github.com/aleksandrvarlamov/safer/internal/lib/logger/ctxlog"
 	"github.com/aleksandrvarlamov/safer/internal/lib/logger/sl"
 	"github.com/aleksandrvarlamov/safer/internal/lib/validation"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator"
 )
@@ -29,22 +29,21 @@ type Downloader interface {
 	Get(ctx context.Context, bucket, key string) ([]byte, string, error)
 }
 
-func Get(log *slog.Logger, downloader Downloader) http.HandlerFunc {
+func Get(downloader Downloader) http.HandlerFunc {
 	validate := validation.New()
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "download.Get"
 
-		log = log.With(
+		log := ctxlog.FromContext(r.Context()).With(
 			slog.String("op", op),
-			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
 
 		bucket := chi.URLParam(r, "bucket")
 		key := chi.URLParam(r, "key")
 
 		if bucket == "" || key == "" {
-			log.Error("bucket and key are required")
+			log.Warn("bucket and key are required")
 			render.JSON(w, r, response.Error("bucket and key are required"))
 			return
 		}
@@ -52,7 +51,7 @@ func Get(log *slog.Logger, downloader Downloader) http.HandlerFunc {
 		if err := validate.Struct(r); err != nil {
 			var validationErrors validator.ValidationErrors
 			if errors.As(err, &validationErrors) {
-				log.Error("invalid request", sl.Err(err))
+				log.Warn("invalid request", sl.Err(err))
 
 				render.JSON(w, r, response.ValidationError(validationErrors))
 
@@ -76,7 +75,6 @@ func Get(log *slog.Logger, downloader Downloader) http.HandlerFunc {
 			contentType = "application/octet-stream"
 		}
 
-		// w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Content-Disposition", "attachment; filename=\""+key+"\"")
 		w.Write(data)
 	}
