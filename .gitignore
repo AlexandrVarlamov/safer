@@ -33,3 +33,4 @@ config.yml
 # Editor/IDE
 # .idea/
 # .vscode/
+.zcode/
